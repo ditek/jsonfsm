@@ -5,30 +5,56 @@
         {
             "name": "DISARMED",
             "action": "Log",
-            "action_arg": "",
             "waitForEvent": true
         },
         {
             "name": "ENTER_CODE",
             "action": "ValidateCode",
-            "action_arg": "",
+            "waitForEvent": true
+        },
+        {
+            "name": "SEND_OK_RESPONSE",
+            "action": "SendResponse",
+            "action_arg": "OK",
+            "waitForEvent": false
+        },
+        {
+            "name": "SEND_ERROR_RESPONSE",
+            "action": "SendResponse",
+            "action_arg": "ERROR",
+            "waitForEvent": false
+        },
+        {
+            "name": "ARMED",
+            "action": "Log",
             "waitForEvent": true
         }
     ],
     "transitions": [
         {
             "from": "DISARMED",
-            "branch": false,
             "toSuccess": "ENTER_CODE",
+            "branch": false,
             "event": "ARM"
         },
         {
             "from": "ENTER_CODE",
-            "branch": true,
             "toSuccess": "SEND_OK_RESPONSE",
             "toFailure": "SEND_ERROR_RESPONSE",
+            "branch": true,
             "event": "USER_CODE"
+        },
+        {
+            "from": "SEND_OK_RESPONSE",
+            "toSuccess": "ARMED",
+            "branch": false
+        },
+        {
+            "from": "SEND_ERROR_RESPONSE",
+            "toSuccess": "ENTER_CODE",
+            "branch": false
         }
+        
     ],
     "events": [
         "ARM",

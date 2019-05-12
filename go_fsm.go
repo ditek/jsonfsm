@@ -1,7 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
 	"reflect"
 )
 
@@ -11,7 +15,7 @@ type Transition struct {
 	ToSuccess string `json:"toSuccess"`
 	ToFailure string `json:"toFailure,omitempty"`
 	Branch    bool   `json:"branch"`
-	Event     string `json:"event"`
+	Event     string `json:"event,omitempty"`
 }
 
 // State epresents an FSM state
@@ -152,42 +156,24 @@ func (fsm *FSM) SendResponse(response string) bool {
 }
 
 func main() {
-	fsm := New("DISARMED", "123")
-	fsm.AddState("DISARMED", "Log", "", true)
-	fsm.AddState("ENTER_CODE", "ValidateCode", "", true)
-	fsm.AddState("SEND_OK_RESPONSE", "SendResponse", "OK", false)
-	fsm.AddState("SEND_ERROR_RESPONSE", "SendResponse", "ERROR", false)
-	fsm.AddState("ARMED", "Log", "", true)
+	file, err := os.Open("fsm.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var fsm FSM
+	err = json.Unmarshal(data, &fsm)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	fsm.SetState(fsm.InitialState)
 
-	t := Transition{
-		From:      "DISARMED",
-		ToSuccess: "ENTER_CODE",
-		Branch:    false,
-		Event:     "ARM",
-	}
-	fsm.Transitions = append(fsm.Transitions, t)
-
-	t = Transition{
-		From:      "ENTER_CODE",
-		ToSuccess: "SEND_OK_RESPONSE",
-		ToFailure: "SEND_ERROR_RESPONSE",
-		Branch:    true,
-		Event:     "USER_CODE",
-	}
-	fsm.Transitions = append(fsm.Transitions, t)
-
-	t = Transition{
-		From:      "SEND_OK_RESPONSE",
-		ToSuccess: "ARMED",
-		Branch:    false,
-		Event:     "FOREVER",
-	}
-	fsm.Transitions = append(fsm.Transitions, t)
-
-	fmt.Println()
-
-	err := fsm.SendEvent("ARM", "Arming the machine!")
+	err = fsm.SendEvent("ARM", "Arming the machine!")
 	if err != nil {
 		fmt.Println(err)
 	}
