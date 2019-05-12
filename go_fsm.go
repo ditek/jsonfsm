@@ -5,8 +5,7 @@ import (
 	"reflect"
 )
 
-const expectedCode = "123"
-
+// Transition represents an FSM transition
 type Transition struct {
 	from      string
 	toSuccess string
@@ -15,6 +14,7 @@ type Transition struct {
 	eventName string
 }
 
+// State epresents an FSM state
 type State struct {
 	name         string
 	action       string
@@ -22,13 +22,16 @@ type State struct {
 	waitForEvent bool
 }
 
+// FSM represents the state machine
 type FSM struct {
 	StartState   string
 	States       map[string]State
 	CurrentState State
 	Transitions  []Transition
+	ExpectedCode string
 }
 
+// AddState adds a new state to the state machine
 func (fsm *FSM) AddState(stateName string, action string,
 	actionArg string, waitForEvent bool) {
 	fsm.States[stateName] = State{
@@ -39,6 +42,9 @@ func (fsm *FSM) AddState(stateName string, action string,
 	}
 }
 
+// SendEvent sends a new event to the state machine
+// Takes event name and a parameter to be passed to the action
+// Returns an error if the state/event combination is not found
 func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
 	// Find the transition that matches the state/event
 	fmt.Println("SendEvent:", eventName, eventParam)
@@ -51,13 +57,15 @@ func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
 	return fmt.Errorf("Error: No transition supports the given state/event combination - %s/%s", fsm.CurrentState.name, eventName)
 }
 
-func (fsm *FSM) setState(name string) error {
+// SetState sets the state machine to the specified state
+// Returns an error if the state is not found
+func (fsm *FSM) SetState(name string) error {
 	newState, found := fsm.States[name]
 	if !found {
 		return fmt.Errorf("Error: State '%s' not found in states list", name)
 	}
 	fsm.CurrentState = newState
-	fmt.Println("setState:", newState)
+	fmt.Println("SetState:", newState)
 	if fsm.CurrentState.waitForEvent {
 		return nil
 	}
@@ -73,6 +81,8 @@ func (fsm *FSM) setState(name string) error {
 	return fmt.Errorf("Error: No transition supports the given state combination - %s", fsm.CurrentState.name)
 }
 
+// beginTransition begins a new transition
+// Returns an error if the state is not found
 func (fsm *FSM) beginTransition(t Transition, actionArg string) error {
 	fmt.Println("beginTransition: actionArg =", actionArg, t)
 	success := fsm.callAction(actionArg)
@@ -86,8 +96,7 @@ func (fsm *FSM) beginTransition(t Transition, actionArg string) error {
 		nextState = t.toSuccess
 	}
 
-	fsm.setState(nextState)
-	return nil
+	return fsm.SetState(nextState)
 }
 
 // callAction uses reflection to call an action using its name
@@ -98,6 +107,17 @@ func (fsm *FSM) callAction(arg string) bool {
 	return value.Interface().(bool)
 }
 
+// New creates and initializes a new state machine
+func New(startState string, expectedCode string) *FSM {
+	fsm := &FSM{
+		StartState:   startState,
+		States:       map[string]State{},
+		Transitions:  []Transition{},
+		ExpectedCode: expectedCode,
+	}
+	return fsm
+}
+
 /**** Local package extentions ***/
 
 func (fsm *FSM) Log(arg string) bool {
@@ -106,7 +126,7 @@ func (fsm *FSM) Log(arg string) bool {
 }
 
 func (fsm *FSM) ValidateCode(code string) bool {
-	return code == expectedCode
+	return code == fsm.ExpectedCode
 }
 
 func (fsm *FSM) SendResponse(response string) bool {
@@ -120,18 +140,13 @@ func (fsm *FSM) SendResponse(response string) bool {
 }
 
 func main() {
-	fsm := FSM{
-		StartState:  "DISARMED",
-		States:      map[string]State{},
-		Transitions: []Transition{},
-	}
-
+	fsm := New("DISARMED", "123")
 	fsm.AddState("DISARMED", "Log", "", true)
 	fsm.AddState("ENTER_CODE", "ValidateCode", "", true)
-	fsm.AddState("SEND_OK_RESPPONSE", "SendResponse", "OK", false)
-	fsm.AddState("SEND_ERROR_RESPPONSE", "SendResponse", "ERROR", false)
+	fsm.AddState("SEND_OK_RESPONSE", "SendResponse", "OK", false)
+	fsm.AddState("SEND_ERROR_RESPONSE", "SendResponse", "ERROR", false)
 	fsm.AddState("ARMED", "Log", "", true)
-	fsm.setState(fsm.StartState)
+	fsm.SetState(fsm.StartState)
 
 	t := Transition{
 		from:      "DISARMED",
@@ -143,15 +158,15 @@ func main() {
 
 	t = Transition{
 		from:      "ENTER_CODE",
-		toSuccess: "SEND_OK_RESPPONSE",
-		toFailure: "SEND_ERROR_RESPPONSE",
+		toSuccess: "SEND_OK_RESPONSE",
+		toFailure: "SEND_ERROR_RESPONSE",
 		branch:    true,
 		eventName: "USER_CODE",
 	}
 	fsm.Transitions = append(fsm.Transitions, t)
 
 	t = Transition{
-		from:      "SEND_OK_RESPPONSE",
+		from:      "SEND_OK_RESPONSE",
 		toSuccess: "ARMED",
 		branch:    false,
 		eventName: "FOREVER",
