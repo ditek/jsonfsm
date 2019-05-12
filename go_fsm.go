@@ -7,19 +7,19 @@ import (
 
 // Transition represents an FSM transition
 type Transition struct {
-	from      string
-	toSuccess string
-	toFailure string
-	branch    bool
-	eventName string
+	From      string
+	ToSuccess string
+	ToFailure string
+	Branch    bool
+	EventName string
 }
 
 // State epresents an FSM state
 type State struct {
-	name         string
-	action       string
-	actionArg    string
-	waitForEvent bool
+	Name         string
+	Action       string
+	ActionArg    string
+	WaitForEvent bool
 }
 
 // FSM represents the state machine
@@ -35,10 +35,10 @@ type FSM struct {
 func (fsm *FSM) AddState(stateName string, action string,
 	actionArg string, waitForEvent bool) {
 	fsm.States[stateName] = State{
-		name:         stateName,
-		action:       action,
-		actionArg:    actionArg,
-		waitForEvent: waitForEvent,
+		Name:         stateName,
+		Action:       action,
+		ActionArg:    actionArg,
+		WaitForEvent: waitForEvent,
 	}
 }
 
@@ -49,12 +49,12 @@ func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
 	// Find the transition that matches the state/event
 	fmt.Println("SendEvent:", eventName, eventParam)
 	for _, t := range fsm.Transitions {
-		if t.from == fsm.CurrentState.name && t.eventName == eventName {
+		if t.From == fsm.CurrentState.Name && t.EventName == eventName {
 			fsm.beginTransition(t, eventParam)
 			return nil
 		}
 	}
-	return fmt.Errorf("Error: No transition supports the given state/event combination - %s/%s", fsm.CurrentState.name, eventName)
+	return fmt.Errorf("Error: No transition supports the given state/event combination - %s/%s", fsm.CurrentState.Name, eventName)
 }
 
 // SetState sets the state machine to the specified state
@@ -66,19 +66,19 @@ func (fsm *FSM) SetState(name string) error {
 	}
 	fsm.CurrentState = newState
 	fmt.Println("SetState:", newState)
-	if fsm.CurrentState.waitForEvent {
+	if fsm.CurrentState.WaitForEvent {
 		return nil
 	}
 
 	// The state doesn't wait for an event so perform next transition
 	// Find the transition that matches the state
 	for _, t := range fsm.Transitions {
-		if t.from == fsm.CurrentState.name {
-			fsm.beginTransition(t, fsm.CurrentState.actionArg)
+		if t.From == fsm.CurrentState.Name {
+			fsm.beginTransition(t, fsm.CurrentState.ActionArg)
 			return nil
 		}
 	}
-	return fmt.Errorf("Error: No transition supports the given state combination - %s", fsm.CurrentState.name)
+	return fmt.Errorf("Error: No transition supports the given state combination - %s", fsm.CurrentState.Name)
 }
 
 // beginTransition begins a new transition
@@ -90,10 +90,10 @@ func (fsm *FSM) beginTransition(t Transition, actionArg string) error {
 	// Choose the next state depending on the action returned
 	// value and whether the transition supports branching
 	var nextState string
-	if t.branch && !success {
-		nextState = t.toFailure
+	if t.Branch && !success {
+		nextState = t.ToFailure
 	} else {
-		nextState = t.toSuccess
+		nextState = t.ToSuccess
 	}
 
 	return fsm.SetState(nextState)
@@ -102,7 +102,7 @@ func (fsm *FSM) beginTransition(t Transition, actionArg string) error {
 // callAction uses reflection to call an action using its name
 func (fsm *FSM) callAction(arg string) bool {
 	obj := reflect.ValueOf(fsm)
-	method := obj.MethodByName(fsm.CurrentState.action)
+	method := obj.MethodByName(fsm.CurrentState.Action)
 	value := method.Call([]reflect.Value{reflect.ValueOf(arg)})[0]
 	return value.Interface().(bool)
 }
@@ -149,27 +149,27 @@ func main() {
 	fsm.SetState(fsm.StartState)
 
 	t := Transition{
-		from:      "DISARMED",
-		toSuccess: "ENTER_CODE",
-		branch:    false,
-		eventName: "ARM",
+		From:      "DISARMED",
+		ToSuccess: "ENTER_CODE",
+		Branch:    false,
+		EventName: "ARM",
 	}
 	fsm.Transitions = append(fsm.Transitions, t)
 
 	t = Transition{
-		from:      "ENTER_CODE",
-		toSuccess: "SEND_OK_RESPONSE",
-		toFailure: "SEND_ERROR_RESPONSE",
-		branch:    true,
-		eventName: "USER_CODE",
+		From:      "ENTER_CODE",
+		ToSuccess: "SEND_OK_RESPONSE",
+		ToFailure: "SEND_ERROR_RESPONSE",
+		Branch:    true,
+		EventName: "USER_CODE",
 	}
 	fsm.Transitions = append(fsm.Transitions, t)
 
 	t = Transition{
-		from:      "SEND_OK_RESPONSE",
-		toSuccess: "ARMED",
-		branch:    false,
-		eventName: "FOREVER",
+		From:      "SEND_OK_RESPONSE",
+		ToSuccess: "ARMED",
+		Branch:    false,
+		EventName: "FOREVER",
 	}
 	fsm.Transitions = append(fsm.Transitions, t)
 
@@ -179,12 +179,12 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("Current state: ", fsm.CurrentState.name)
+	fmt.Println("Current state: ", fsm.CurrentState.Name)
 	fmt.Println()
 
 	err = fsm.SendEvent("USER_CODE", "123")
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("Current state: ", fsm.CurrentState.name)
+	fmt.Println("Current state: ", fsm.CurrentState.Name)
 }
