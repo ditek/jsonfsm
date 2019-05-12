@@ -2,15 +2,10 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 )
 
 type Handler func(string) string
-
-type Event struct {
-	name string
-	// State to be affected by event
-	state string
-}
 
 type Transition struct {
 	from         string
@@ -24,11 +19,11 @@ type Transition struct {
 type FSM struct {
 	StartState  string
 	State       string
-	Handlers    map[string]Handler
+	Handlers    map[string]string
 	Transitions []Transition
 }
 
-func (fsm *FSM) AddState(stateName string, handlerFunc Handler) {
+func (fsm *FSM) AddState(stateName string, handlerFunc string) {
 	fsm.Handlers[stateName] = handlerFunc
 }
 
@@ -42,7 +37,8 @@ func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
 			if !stateFound {
 				return fmt.Errorf("Error: State '%s' not found", fsm.State)
 			}
-			nextState := action(eventParam)
+			nextState := fsm.callAction(action, eventParam)
+
 			if t.branch {
 				fsm.State = nextState
 			} else {
@@ -54,23 +50,31 @@ func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
 	return fmt.Errorf("Error: No transition supports the given state/event combination - %s/%s", fsm.State, eventName)
 }
 
+// callAction uses reflection to call an action using its name
+func (fsm *FSM) callAction(action string, arg string) string {
+	obj := reflect.ValueOf(fsm)
+	method := obj.MethodByName(action)
+	value := method.Call([]reflect.Value{reflect.ValueOf(arg)})[0]
+	return value.Interface().(string)
+}
+
 /**** Local package extentions ***/
 
 func (fsm *FSM) Log(param string) string {
 	fmt.Println(param)
-	return "fsm.transition.to.sucess"
+	return "fsm.transition.to.success"
 }
 
 func main() {
 	fsm := FSM{
 		StartState:  "DISARMED",
 		State:       "DISARMED",
-		Handlers:    map[string]Handler{},
+		Handlers:    map[string]string{},
 		Transitions: []Transition{},
 	}
 
-	fsm.AddState("DISARMED", fsm.Log)
-	fsm.AddState("ENTER_CODE", fsm.Log)
+	fsm.AddState("DISARMED", "Log")
+	fsm.AddState("ENTER_CODE", "Log")
 
 	t := Transition{
 		from:         "DISARMED",
