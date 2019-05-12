@@ -1,0 +1,37 @@
+{
+    "initialState": "DISARMED",
+    "expectedCode": "123",
+    "states": [
+        {
+            "name": "DISARMED",
+            "action": "Log",
+            "action_arg": "",
+            "waitForEvent": true
+        },
+        {
+            "name": "ENTER_CODE",
+            "action": "ValidateCode",
+            "action_arg": "",
+            "waitForEvent": true
+        }
+    ],
+    "transitions": [
+        {
+            "from": "DISARMED",
+            "branch": false,
+            "toSuccess": "ENTER_CODE",
+            "event": "ARM"
+        },
+        {
+            "from": "ENTER_CODE",
+            "branch": true,
+            "toSuccess": "SEND_OK_RESPONSE",
+            "toFailure": "SEND_ERROR_RESPONSE",
+            "event": "USER_CODE"
+        }
+    ],
+    "events": [
+        "ARM",
+        "USER_CODE"
+    ]
+}
