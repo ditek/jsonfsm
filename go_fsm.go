@@ -25,7 +25,7 @@ type FSM struct {
 	StartState  string
 	State       string
 	Handlers    map[string]Handler
-	Transitions map[Event]Transition
+	Transitions []Transition
 }
 
 func (fsm *FSM) AddState(stateName string, handlerFunc Handler) {
@@ -33,27 +33,25 @@ func (fsm *FSM) AddState(stateName string, handlerFunc Handler) {
 }
 
 func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
-	eventObj := Event{
-		name:  eventName,
-		state: fsm.State,
-	}
-	// Check if the current state accepts the event
-	if transition, found := fsm.Transitions[eventObj]; found {
-		fmt.Println("Transition:", transition)
-		// Trigger action
-		action, stateFound := fsm.Handlers[fsm.State]
-		if !stateFound {
-			return fmt.Errorf("Error: State '%s' not found", fsm.State)
+	// Find the transition that matches the state/event
+	for _, t := range fsm.Transitions {
+		if t.from == fsm.State && t.eventName == eventName {
+			fmt.Println("Transition:", t)
+			// Trigger action
+			action, stateFound := fsm.Handlers[fsm.State]
+			if !stateFound {
+				return fmt.Errorf("Error: State '%s' not found", fsm.State)
+			}
+			nextState := action(eventParam)
+			if t.branch {
+				fsm.State = nextState
+			} else {
+				fsm.State = t.toSuccess
+			}
+			return nil
 		}
-		nextState := action(eventParam)
-		if transition.branch {
-			fsm.State = nextState
-		} else {
-			fsm.State = transition.toSuccess
-		}
-		return nil
 	}
-	return fmt.Errorf("Error: event/state combination not supported")
+	return fmt.Errorf("Error: No transition supports the given state/event combination - %s/%s", fsm.State, eventName)
 }
 
 /**** Local package extentions ***/
@@ -64,20 +62,16 @@ func (fsm *FSM) Log(param string) string {
 }
 
 func main() {
-	x := FSM{
+	fsm := FSM{
 		StartState:  "DISARMED",
 		State:       "DISARMED",
 		Handlers:    map[string]Handler{},
-		Transitions: map[Event]Transition{},
+		Transitions: []Transition{},
 	}
 
-	x.AddState("DISARMED", x.Log)
-	x.AddState("ENTER_CODE", x.Log)
+	fsm.AddState("DISARMED", fsm.Log)
+	fsm.AddState("ENTER_CODE", fsm.Log)
 
-	e := Event{
-		name:  "ARM",
-		state: "DISARME",
-	}
 	t := Transition{
 		from:         "DISARMED",
 		toSuccess:    "ENTER_CODE",
@@ -85,13 +79,13 @@ func main() {
 		waitForEvent: true,
 		eventName:    "ARM",
 	}
-	x.Transitions[e] = t
+	fsm.Transitions = append(fsm.Transitions, t)
 
-	err := x.SendEvent("ARM", "param")
+	err := fsm.SendEvent("ARM", "param")
 
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Println("Current state: ", x.State)
+	fmt.Println("Current state: ", fsm.State)
 }
