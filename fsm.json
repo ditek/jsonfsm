@@ -5,29 +5,34 @@
         {
             "name": "DISARMED",
             "action": "Log",
-            "waitForEvent": true
+            "waitForEvent": true,
+            "sendResponse": true
         },
         {
             "name": "ENTER_CODE",
             "action": "ValidateCode",
-            "waitForEvent": true
+            "waitForEvent": true,
+            "sendResponse": false
         },
         {
             "name": "SEND_OK_RESPONSE",
             "action": "SendResponse",
             "action_arg": "OK",
-            "waitForEvent": false
+            "waitForEvent": false,
+            "sendResponse": true
         },
         {
             "name": "SEND_ERROR_RESPONSE",
             "action": "SendResponse",
             "action_arg": "ERROR",
-            "waitForEvent": false
+            "waitForEvent": false,
+            "sendResponse": true
         },
         {
             "name": "ARMED",
             "action": "Log",
-            "waitForEvent": true
+            "waitForEvent": true,
+            "sendResponse": false
         }
     ],
     "transitions": [

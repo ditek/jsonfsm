@@ -27,6 +27,7 @@ type State struct {
 	Action       string `json:"action"`
 	ActionArg    string `json:"action_arg,omitempty"`
 	WaitForEvent bool   `json:"waitForEvent"`
+	SendResponse bool   `json:"sendResponse"`
 }
 
 // FSM represents the state machine
@@ -63,7 +64,7 @@ func (fsm *FSM) GetState(name string) (State, error) {
 
 // SetState sets the state machine to the specified state
 // Returns an error if the state is not found
-func (fsm *FSM) SetState(name string) error {
+func (fsm *FSM) SetState(name string, event Event) error {
 	newState, err := fsm.GetState(name)
 	if err != nil {
 		return err
@@ -76,9 +77,10 @@ func (fsm *FSM) SetState(name string) error {
 
 	// The state doesn't wait for an event so perform next transition
 	// Find the transition that matches the state
+	event.Param = fsm.CurrentState.ActionArg
 	for _, t := range fsm.Transitions {
 		if t.From == fsm.CurrentState.Name {
-			fsm.beginTransition(t, fsm.CurrentState.ActionArg)
+			fsm.beginTransition(t, event)
 			return nil
 		}
 	}
@@ -88,23 +90,23 @@ func (fsm *FSM) SetState(name string) error {
 // SendEvent sends a new event to the state machine
 // Takes event name and a parameter to be passed to the action
 // Returns an error if the state/event combination is not found
-func (fsm *FSM) SendEvent(eventName string, eventParam string) error {
+func (fsm *FSM) SendEvent(event Event) error {
 	// Find the transition that matches the state/event
-	fmt.Println("SendEvent:", eventName, eventParam)
+	fmt.Println("SendEvent:", event.Action, event.Param)
 	for _, t := range fsm.Transitions {
-		if t.From == fsm.CurrentState.Name && t.Event == eventName {
-			fsm.beginTransition(t, eventParam)
+		if t.From == fsm.CurrentState.Name && t.Event == event.Action {
+			fsm.beginTransition(t, event)
 			return nil
 		}
 	}
-	return fmt.Errorf("Error: No transition supports the current state ('%s') and the sent event ('%s')", fsm.CurrentState.Name, eventName)
+	return fmt.Errorf("Error: No transition supports the current state ('%s') and the sent event ('%s')", fsm.CurrentState.Name, event.Action)
 }
 
 // beginTransition begins a new transition
 // Returns an error if the state is not found
-func (fsm *FSM) beginTransition(t Transition, actionArg string) error {
-	fmt.Println("beginTransition: actionArg =", actionArg, t)
-	success := fsm.callAction(actionArg)
+func (fsm *FSM) beginTransition(t Transition, event Event) error {
+	fmt.Println("beginTransition: actionArg =", event.Param, t)
+	success := fsm.callAction(event)
 
 	// Choose the next state depending on the action returned
 	// value and whether the transition supports branching
@@ -115,15 +117,16 @@ func (fsm *FSM) beginTransition(t Transition, actionArg string) error {
 		nextState = t.ToSuccess
 	}
 
-	return fsm.SetState(nextState)
+	return fsm.SetState(nextState, event)
 }
 
 // callAction uses reflection to call an action using its name
-func (fsm *FSM) callAction(arg string) bool {
+func (fsm *FSM) callAction(event Event) bool {
 	obj := reflect.ValueOf(fsm)
 	method := obj.MethodByName(fsm.CurrentState.Action)
-	value := method.Call([]reflect.Value{reflect.ValueOf(arg)})[0]
-	return value.Interface().(bool)
+	// Convert to a function with the right signature
+	mCallable := method.Interface().(func(string, http.ResponseWriter) bool)
+	return mCallable(event.Param, event.Writer)
 }
 
 // New creates and initializes a new state machine
@@ -140,23 +143,29 @@ func New(startState string, expectedCode string) *FSM {
 /**** Local package extentions ***/
 
 // Log prints out the recieved message
-func (fsm *FSM) Log(arg string) bool {
-	fmt.Println(arg)
+func (fsm *FSM) Log(arg string, w http.ResponseWriter) bool {
+	if fsm.CurrentState.SendResponse {
+		respondWithJSON(w, http.StatusOK, "")
+	}
+	log.Println(arg)
 	return true
 }
 
 // ValidateCode checks the received code against the expected one
-func (fsm *FSM) ValidateCode(code string) bool {
+func (fsm *FSM) ValidateCode(code string, w http.ResponseWriter) bool {
 	return code == fsm.ExpectedCode
 }
 
 // SendResponse send and http response
-func (fsm *FSM) SendResponse(response string) bool {
+func (fsm *FSM) SendResponse(response string, w http.ResponseWriter) bool {
 	fmt.Println("SendResponse: ", response)
+	// if strings.Compare(response, "OK") == 0 {
 	if response == "OK" {
-		fmt.Println("Response is OK")
+		respondWithJSON(w, http.StatusOK, "CODE OK")
+		// fmt.Println("Response is OK")
 	} else {
-		fmt.Println("Response is ERROR")
+		respondWithError(w, http.StatusNotAcceptable, "WRONG CODE")
+		// fmt.Println("Response is ERROR")
 	}
 	return true
 }
@@ -165,8 +174,9 @@ func (fsm *FSM) SendResponse(response string) bool {
 
 // Event represents a received HTTP event
 type Event struct {
-	Action string `json:"action"`
-	Param  string `json:"param"`
+	Action string              `json:"action"`
+	Param  string              `json:"param"`
+	Writer http.ResponseWriter `json:"writer,omitempty"`
 }
 
 func eventHandler(w http.ResponseWriter, r *http.Request, fsm *FSM) {
@@ -177,14 +187,14 @@ func eventHandler(w http.ResponseWriter, r *http.Request, fsm *FSM) {
 		return
 	}
 
-	err := fsm.SendEvent(event.Action, event.Param)
+	event.Writer = w
+	err := fsm.SendEvent(event)
 	if err != nil {
 		fmt.Println(err)
 		respondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	fmt.Println("Current state: ", fsm.CurrentState.Name)
-	respondWithJSON(w, http.StatusCreated, event)
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -215,7 +225,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fsm.SetState(fsm.InitialState)
+	fsm.SetState(fsm.InitialState, Event{})
 
 	r := mux.NewRouter()
 	r.HandleFunc("/send_event", func(w http.ResponseWriter, r *http.Request) {
