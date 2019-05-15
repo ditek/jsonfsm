@@ -70,7 +70,7 @@ func (fsm *FSM) SetState(name string, event Event) error {
 		return err
 	}
 	fsm.CurrentState = newState
-	fmt.Println("SetState:", newState)
+	// fmt.Println("SetState:", newState)
 	if fsm.CurrentState.WaitForEvent {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (fsm *FSM) SendEvent(event Event) error {
 // beginTransition begins a new transition
 // Returns an error if the state is not found
 func (fsm *FSM) beginTransition(t Transition, event Event) error {
-	fmt.Println("beginTransition: actionArg =", event.Param, t)
+	// fmt.Println("beginTransition: actionArg =", event.Param, t)
 	success := fsm.callAction(event)
 
 	// Choose the next state depending on the action returned
@@ -158,14 +158,10 @@ func (fsm *FSM) ValidateCode(code string, w http.ResponseWriter) bool {
 
 // SendResponse send and http response
 func (fsm *FSM) SendResponse(response string, w http.ResponseWriter) bool {
-	fmt.Println("SendResponse: ", response)
-	// if strings.Compare(response, "OK") == 0 {
 	if response == "OK" {
 		respondWithJSON(w, http.StatusOK, "CODE OK")
-		// fmt.Println("Response is OK")
 	} else {
 		respondWithError(w, http.StatusNotAcceptable, "WRONG CODE")
-		// fmt.Println("Response is ERROR")
 	}
 	return true
 }
@@ -190,7 +186,7 @@ func eventHandler(w http.ResponseWriter, r *http.Request, fsm *FSM) {
 	event.Writer = w
 	err := fsm.SendEvent(event)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		respondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -209,7 +205,12 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 }
 
 func main() {
-	file, err := os.Open("fsm.json")
+	if len(os.Args) < 2 {
+		fmt.Println(fmt.Errorf("Usage: ./jsonfsm <file_name>"))
+		os.Exit(1)
+	}
+	fileName := os.Args[1]
+	file, err := os.Open(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -234,8 +235,4 @@ func main() {
 	if err := http.ListenAndServe(":3000", r); err != nil {
 		log.Fatal(err)
 	}
-
-	// err = fsm.SendEvent("ARM", "Arming the machine!")
-	// err = fsm.SendEvent("USER_CODE", "123")
-	// fmt.Println("Current state: ", fsm.CurrentState.Name)
 }
