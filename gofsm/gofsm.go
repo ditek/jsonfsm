@@ -1,15 +1,11 @@
-package main
+package gofsm
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"reflect"
-
-	"github.com/gorilla/mux"
 )
 
 // Transition represents an FSM transition
@@ -21,13 +17,20 @@ type Transition struct {
 	Event     string `json:"event,omitempty"`
 }
 
-// State epresents an FSM state
+// State presents an FSM state
 type State struct {
 	Name         string `json:"name"`
 	Action       string `json:"action"`
 	ActionArg    string `json:"action_arg,omitempty"`
 	WaitForEvent bool   `json:"waitForEvent"`
 	SendResponse bool   `json:"sendResponse"`
+}
+
+// Event represents a received HTTP event
+type Event struct {
+	Action string              `json:"action"`
+	Param  string              `json:"param"`
+	Writer http.ResponseWriter `json:"writer,omitempty"`
 }
 
 // FSM represents the state machine
@@ -37,6 +40,11 @@ type FSM struct {
 	CurrentState State        `json:"omitempty"`
 	Transitions  []Transition `json:"transitions"`
 	ExpectedCode string       `json:"expectedCode"`
+}
+
+// Init initializes the state machine
+func (fsm *FSM) Init() {
+	fsm.SetState(fsm.InitialState, Event{})
 }
 
 // AddState adds a new state to the state machine
@@ -70,7 +78,7 @@ func (fsm *FSM) SetState(name string, event Event) error {
 		return err
 	}
 	fsm.CurrentState = newState
-	// fmt.Println("SetState:", newState)
+	log.Println("Current state: ", fsm.CurrentState.Name)
 	if fsm.CurrentState.WaitForEvent {
 		return nil
 	}
@@ -92,7 +100,7 @@ func (fsm *FSM) SetState(name string, event Event) error {
 // Returns an error if the state/event combination is not found
 func (fsm *FSM) SendEvent(event Event) error {
 	// Find the transition that matches the state/event
-	fmt.Println("SendEvent:", event.Action, event.Param)
+	// fmt.Println("SendEvent:", event.Action, event.Param)
 	for _, t := range fsm.Transitions {
 		if t.From == fsm.CurrentState.Name && t.Event == event.Action {
 			fsm.beginTransition(t, event)
@@ -125,8 +133,8 @@ func (fsm *FSM) callAction(event Event) bool {
 	obj := reflect.ValueOf(fsm)
 	method := obj.MethodByName(fsm.CurrentState.Action)
 	// Convert to a function with the right signature
-	mCallable := method.Interface().(func(string, http.ResponseWriter) bool)
-	return mCallable(event.Param, event.Writer)
+	callable := method.Interface().(func(string, http.ResponseWriter) bool)
+	return callable(event.Param, event.Writer)
 }
 
 // New creates and initializes a new state machine
@@ -140,12 +148,12 @@ func New(startState string, expectedCode string) *FSM {
 	return fsm
 }
 
-/**** Local package extentions ***/
+/******* Callable Actions ********/
 
-// Log prints out the recieved message
+// Log prints out the received message
 func (fsm *FSM) Log(arg string, w http.ResponseWriter) bool {
 	if fsm.CurrentState.SendResponse {
-		respondWithJSON(w, http.StatusOK, "")
+		RespondWithJSON(w, http.StatusOK, "")
 	}
 	log.Println(arg)
 	return true
@@ -159,80 +167,24 @@ func (fsm *FSM) ValidateCode(code string, w http.ResponseWriter) bool {
 // SendResponse send and http response
 func (fsm *FSM) SendResponse(response string, w http.ResponseWriter) bool {
 	if response == "OK" {
-		respondWithJSON(w, http.StatusOK, "CODE OK")
+		RespondWithJSON(w, http.StatusOK, "CODE OK")
 	} else {
-		respondWithError(w, http.StatusNotAcceptable, "WRONG CODE")
+		RespondWithError(w, http.StatusNotAcceptable, "WRONG CODE")
 	}
 	return true
 }
 
-/**** REST End Points ****/
+/****** Convenience Functions *******/
 
-// Event represents a received HTTP event
-type Event struct {
-	Action string              `json:"action"`
-	Param  string              `json:"param"`
-	Writer http.ResponseWriter `json:"writer,omitempty"`
+// RespondWithError sends an HTTP error response
+func RespondWithError(w http.ResponseWriter, code int, msg string) {
+	RespondWithJSON(w, code, map[string]string{"error": msg})
 }
 
-func eventHandler(w http.ResponseWriter, r *http.Request, fsm *FSM) {
-	defer r.Body.Close()
-	var event Event
-	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	event.Writer = w
-	err := fsm.SendEvent(event)
-	if err != nil {
-		log.Println(err)
-		respondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	fmt.Println("Current state: ", fsm.CurrentState.Name)
-}
-
-func respondWithError(w http.ResponseWriter, code int, msg string) {
-	respondWithJSON(w, code, map[string]string{"error": msg})
-}
-
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+// RespondWithJSON sends an custom HTTP response
+func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)
-}
-
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println(fmt.Errorf("Usage: ./jsonfsm <file_name>"))
-		os.Exit(1)
-	}
-	fileName := os.Args[1]
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	data, err := ioutil.ReadAll(file)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Create the FSM from the json file
-	var fsm FSM
-	err = json.Unmarshal(data, &fsm)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fsm.SetState(fsm.InitialState, Event{})
-
-	r := mux.NewRouter()
-	r.HandleFunc("/send_event", func(w http.ResponseWriter, r *http.Request) {
-		eventHandler(w, r, &fsm)
-	}).Methods("POST")
-	if err := http.ListenAndServe(":3000", r); err != nil {
-		log.Fatal(err)
-	}
 }
