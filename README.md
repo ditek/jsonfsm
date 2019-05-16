@@ -21,7 +21,7 @@ Run the executable with the JSON file that describes the state machine as an arg
 If things go well, you should see a log message specifying the current state.
 
 ### Sending Events
-Events are sent as HTTP POST requests and have a body that follows this format. The given example expects requests on `localhost:3000/send_event`.
+Events are sent as HTTP POST requests and have a body that follows this format.
 
 ```json
 {
@@ -29,6 +29,7 @@ Events are sent as HTTP POST requests and have a body that follows this format. 
     "param": "action_param"
 }
 ```
+The given example expects requests on `localhost:3000/send_event`.
 
 An error message will be printed if the current state does not support the given event. This is a sample output of the script.
 
@@ -44,7 +45,7 @@ The JSON file should follow the following format.
 
 ```
 {
-    "initialState": "DISARMED",     // Initial FSM state
+    "initialState": "STATE1",     // Initial FSM state
     "expectedCode": "123",          // Code to check against to determine transition destination
     "states": [
         {
