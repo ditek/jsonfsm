@@ -15,23 +15,78 @@ import (
 // FSM is a local alias to allow type extension
 type FSM gofsm.FSM
 
+const expectedCode = "123"
+
+var httpWriter http.ResponseWriter
+
+// Event represents a received HTTP event
+type Event struct {
+	Action string `json:"action"`
+	Param  string `json:"param"`
+}
+
 /**** REST End Points and Functions ****/
 
 func eventHandler(w http.ResponseWriter, r *http.Request, fsm *gofsm.FSM) {
 	defer r.Body.Close()
-	var event gofsm.Event
+	var event Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		gofsm.RespondWithError(w, http.StatusBadRequest, err.Error())
+		RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	event.Writer = w
-	err := fsm.SendEvent(event)
+	httpWriter = w
+	err := fsm.SendEvent(event.Action, event.Param)
 	if err != nil {
 		log.Println(err)
-		gofsm.RespondWithError(w, http.StatusBadRequest, err.Error())
+		RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+}
+
+/****** Event Handlers *******/
+
+// logRespond logs the received arg and sends an HTTP success response
+func logRespond(arg string) bool {
+	RespondWithJSON(httpWriter, http.StatusOK, arg)
+	log.Println(arg)
+	return true
+}
+
+// logArg logs the received arg
+func logArg(arg string) bool {
+	log.Println(arg)
+	return true
+}
+
+// validateCode checks the received code against the expected one
+func validateCode(code string) bool {
+	return code == expectedCode
+}
+
+// sendResponse send an http response based on the passed argument
+func sendResponse(arg string) bool {
+	if arg == "OK" {
+		RespondWithJSON(httpWriter, http.StatusOK, "CODE OK")
+	} else {
+		RespondWithError(httpWriter, http.StatusNotAcceptable, "WRONG CODE")
+	}
+	return true
+}
+
+/****** Convenience Functions *******/
+
+// RespondWithError sends an HTTP error response
+func RespondWithError(w http.ResponseWriter, code int, msg string) {
+	RespondWithJSON(w, code, map[string]string{"error": msg})
+}
+
+// RespondWithJSON sends an custom HTTP response
+func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
 }
 
 func main() {
@@ -55,9 +110,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println(fsm)
 
-	// Initialize the state machine
+	// Initialize the state machine and register event handlers
 	fsm.Init()
+	fsm.Register("Log", logArg)
+	fsm.Register("LogRespond", logRespond)
+	fsm.Register("ValidateCode", validateCode)
+	fsm.Register("SendResponse", sendResponse)
 
 	r := mux.NewRouter()
 	r.HandleFunc("/send_event", func(w http.ResponseWriter, r *http.Request) {

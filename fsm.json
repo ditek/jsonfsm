@@ -1,38 +1,32 @@
 {
     "initialState": "DISARMED",
-    "expectedCode": "123",
     "states": [
         {
             "name": "DISARMED",
-            "action": "Log",
-            "waitForEvent": true,
-            "sendResponse": true
+            "action": "LogRespond",
+            "waitForEvent": true
         },
         {
             "name": "ENTER_CODE",
             "action": "ValidateCode",
-            "waitForEvent": true,
-            "sendResponse": false
+            "waitForEvent": true
         },
         {
             "name": "SEND_OK_RESPONSE",
             "action": "SendResponse",
             "action_arg": "OK",
-            "waitForEvent": false,
-            "sendResponse": true
+            "waitForEvent": false
         },
         {
             "name": "SEND_ERROR_RESPONSE",
             "action": "SendResponse",
             "action_arg": "ERROR",
-            "waitForEvent": false,
-            "sendResponse": true
+            "waitForEvent": false
         },
         {
             "name": "ARMED",
             "action": "Log",
-            "waitForEvent": true,
-            "sendResponse": false
+            "waitForEvent": true
         }
     ],
     "transitions": [
