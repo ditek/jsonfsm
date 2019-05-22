@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/ditek/jsonfsm.svg?branch=master)](https://travis-ci.org/ditek/jsonfsm)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ditek/jsonfsm)](https://goreportcard.com/report/github.com/ditek/jsonfsm)
+
 # JSON FSM
 Finite State Machine for Go with JSON representation.
 
